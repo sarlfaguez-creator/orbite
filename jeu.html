@@ -171,6 +171,7 @@ body {
 .lien { color: var(--brume); text-underline-offset: 3px; }
 
 .panneau {
+  box-sizing: border-box; /* sinon la marge intérieure fait déborder le panneau sur les petits écrans */
   width: min(100%, 420px); display: flex; flex-direction: column; gap: 14px;
   background: var(--panneau); border: 1px solid var(--trait); border-radius: 18px; padding: 20px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);

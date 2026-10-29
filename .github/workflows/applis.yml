@@ -39,7 +39,7 @@ jobs:
         if: env.ANDROID_CLE_BASE64 == ''
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: env.ANDROID_CLE_BASE64 == ''
         with:
           name: orbite-android-test
@@ -55,12 +55,12 @@ jobs:
           echo "$ANDROID_CLE_BASE64" | base64 -d > "$RUNNER_TEMP/orbite.p12"
           ANDROID_CLE_FICHIER="$RUNNER_TEMP/orbite.p12" ./gradlew assembleRelease bundleRelease --no-daemon
           rm "$RUNNER_TEMP/orbite.p12"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: env.ANDROID_CLE_BASE64 != ''
         with:
           name: orbite-android-test
           path: android/app/build/outputs/apk/release/app-release.apk
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: env.ANDROID_CLE_BASE64 != ''
         with:
           name: orbite-play-store
@@ -99,7 +99,7 @@ jobs:
           xcrun simctl launch "$UDID" io.github.sarlfaguez.orbite
           sleep 15
           xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/iphone-simulateur.png"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: orbite-iphone-capture
           path: ${{ runner.temp }}/iphone-simulateur.png
