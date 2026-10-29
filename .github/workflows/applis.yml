@@ -1,0 +1,133 @@
+# Fabrique les applis Android et iPhone à chaque modification envoyée sur « main », ou à la demande (onglet Actions).
+# Sans secrets : une appli Android de test (APK) et l'appli iPhone lancée sur un simulateur, avec capture d'écran.
+# Avec les secrets décrits dans PUBLIER-STORES.md : le fichier pour le Play Store (AAB) et l'envoi vers TestFlight.
+name: Fabriquer les applis
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: applis
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      NUMERO_VERSION: ${{ github.run_number }}
+      ANDROID_CLE_BASE64: ${{ secrets.ANDROID_CLE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Construire le jeu et le copier dans l'appli
+        run: node construire.mjs && npx cap sync android
+
+      - name: Appli de test (APK)
+        if: env.ANDROID_CLE_BASE64 == ''
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v5
+        if: env.ANDROID_CLE_BASE64 == ''
+        with:
+          name: orbite-android-test
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # Avec la clé : la même signature à chaque fois, donc l'APK de test se met à jour sans perdre la progression.
+      - name: Appli signée (APK de test et AAB pour le Play Store)
+        if: env.ANDROID_CLE_BASE64 != ''
+        working-directory: android
+        env:
+          ANDROID_CLE_MOT_DE_PASSE: ${{ secrets.ANDROID_CLE_MOT_DE_PASSE }}
+        run: |
+          echo "$ANDROID_CLE_BASE64" | base64 -d > "$RUNNER_TEMP/orbite.p12"
+          ANDROID_CLE_FICHIER="$RUNNER_TEMP/orbite.p12" ./gradlew assembleRelease bundleRelease --no-daemon
+          rm "$RUNNER_TEMP/orbite.p12"
+      - uses: actions/upload-artifact@v5
+        if: env.ANDROID_CLE_BASE64 != ''
+        with:
+          name: orbite-android-test
+          path: android/app/build/outputs/apk/release/app-release.apk
+      - uses: actions/upload-artifact@v5
+        if: env.ANDROID_CLE_BASE64 != ''
+        with:
+          name: orbite-play-store
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+  iphone:
+    runs-on: macos-26
+    env:
+      ASC_CLE_ID: ${{ secrets.ASC_CLE_ID }}
+      ASC_EMETTEUR_ID: ${{ secrets.ASC_EMETTEUR_ID }}
+      ASC_CLE_P8: ${{ secrets.ASC_CLE_P8 }}
+      APPLE_EQUIPE_ID: ${{ secrets.APPLE_EQUIPE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Construire le jeu et le copier dans l'appli
+        run: node construire.mjs && npx cap sync ios
+
+      - name: Construire pour le simulateur
+        working-directory: ios/App
+        run: >
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build -quiet
+      - name: Lancer l'appli sur un iPhone simulé et prendre une capture
+        working-directory: ios/App
+        run: |
+          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch "$UDID" io.github.sarlfaguez.orbite
+          sleep 15
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/iphone-simulateur.png"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: orbite-iphone-capture
+          path: ${{ runner.temp }}/iphone-simulateur.png
+
+      # Signature gérée par Apple (clé API App Store Connect, rôle Admin), puis envoi direct vers TestFlight.
+      - name: Envoyer vers TestFlight
+        if: env.ASC_CLE_ID != ''
+        working-directory: ios/App
+        run: |
+          mkdir -p "$RUNNER_TEMP/cles"
+          printf '%s' "$ASC_CLE_P8" > "$RUNNER_TEMP/cles/AuthKey_$ASC_CLE_ID.p8"
+          AUTH=(-allowProvisioningUpdates
+            -authenticationKeyPath "$RUNNER_TEMP/cles/AuthKey_$ASC_CLE_ID.p8"
+            -authenticationKeyID "$ASC_CLE_ID" -authenticationKeyIssuerID "$ASC_EMETTEUR_ID")
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Orbite.xcarchive" archive \
+            DEVELOPMENT_TEAM="$APPLE_EQUIPE_ID" CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} "${AUTH[@]}" -quiet
+          cat > "$RUNNER_TEMP/export.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_EQUIPE_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Orbite.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}"
+          rm -rf "$RUNNER_TEMP/cles"

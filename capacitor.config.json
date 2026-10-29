@@ -1,0 +1,16 @@
+{
+  "appId": "io.github.sarlfaguez.orbite",
+  "appName": "Orbite",
+  "webDir": "www",
+  "backgroundColor": "#04050d",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

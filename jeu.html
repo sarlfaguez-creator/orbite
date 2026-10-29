@@ -168,6 +168,7 @@ body {
 .puce[aria-pressed="true"] { color: var(--encre); border-color: rgba(62, 242, 255, 0.45); }
 .puce[aria-pressed="false"] { text-decoration: line-through; text-decoration-color: rgba(143, 153, 194, 0.6); }
 .astuce { text-align: center; color: var(--brume); font-size: 12.5px; margin: 0; }
+.lien { color: var(--brume); text-underline-offset: 3px; }
 
 .panneau {
   width: min(100%, 420px); display: flex; flex-direction: column; gap: 14px;
@@ -232,6 +233,12 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
 .rang .pts { font: 600 15px var(--f-chiffres); }
 .rang .tps { font: 13px var(--f-chiffres); color: var(--brume); }
 .rang.moi .nom, .rang.moi .pts { color: var(--cyan); }
+button.rang {
+  appearance: none; font: inherit; color: inherit; background: none; border: 0; border-bottom: 1px solid var(--trait);
+  width: 100%; text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.signaler { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--trait); }
+.signaler p { flex: 1 1 100%; margin: 0; color: var(--brume); font-size: 13.5px; }
 .vide { color: var(--brume); font-size: 14px; padding: 8px 4px; }
 .form-pseudo { display: flex; flex-direction: column; gap: 6px; }
 .form-pseudo label { font-size: 13px; color: var(--brume); }
@@ -242,7 +249,8 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
   -webkit-user-select: text; user-select: text;
 }
 
-.btn:focus-visible, .puce:focus-visible, .onglet:focus-visible, .bouton-icone:focus-visible, .ligne-champ input:focus-visible {
+.btn:focus-visible, .puce:focus-visible, .onglet:focus-visible, .bouton-icone:focus-visible, .ligne-champ input:focus-visible,
+button.rang:focus-visible, .lien:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -296,6 +304,7 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
       <button id="btn-installer" class="puce" type="button" hidden>Installer l’appli</button>
     </div>
     <p id="astuce-ios" class="astuce" hidden>Pour jouer hors ligne sur iPhone : Partager, puis « Sur l’écran d’accueil ».</p>
+    <p class="astuce"><a class="lien" href="https://sarlfaguez-creator.github.io/orbite/confidentialite.html" target="_blank" rel="noopener">Confidentialité</a></p>
   </div>
 </section>
 
@@ -407,6 +416,8 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const COARSE = matchMedia('(pointer: coarse)').matches;
   const IN_CLAUDE = typeof window.claude !== 'undefined';
+  // Dans l'appli Android ou iPhone (Capacitor) : vibrations et bouton retour natifs, pas de service worker.
+  const NATIF = window.Capacitor?.isNativePlatform?.() ? window.Capacitor : null;
   const FONT_NUM = 'ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace';
   const FONT_TXT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
@@ -472,11 +483,12 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
   const defaults = () => ({
     dust: 0, dustTotal: 0, starsTotal: 0, perfectsTotal: 0, bestSeries: 0, bestScore: 0,
     skin: 'comete', owned: ['comete'], ach: {}, days: [], history: {},
-    sound: true, vibe: true, pseudo: '', player: newId(), pending: [], tuto: 0,
+    sound: true, vibe: true, pseudo: '', player: newId(), pending: [], tuto: 0, blocked: [],
   });
   const S = Object.assign(defaults(), store.get(SAVE_KEY) || {});
   if (!Array.isArray(S.owned) || !S.owned.length) S.owned = ['comete'];
   if (!Array.isArray(S.days)) S.days = [];
+  if (!Array.isArray(S.blocked)) S.blocked = [];
   if (!Array.isArray(S.pending)) S.pending = [];
   if (!S.ach || typeof S.ach !== 'object') S.ach = {};
   if (!S.history || typeof S.history !== 'object') S.history = {};
@@ -627,7 +639,11 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
       lp.connect(g); g.connect(this.out);
     },
   };
-  const buzz = (ms) => { if (S.vibe && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* refusé */ } } };
+  const buzz = (ms) => {
+    if (!S.vibe) return;
+    if (NATIF) NATIF.nativePromise('Haptics', 'impact', { style: ms < 12 ? 'LIGHT' : ms < 30 ? 'MEDIUM' : 'HEAVY' }).catch(() => {});
+    else if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* refusé */ } }
+  };
 
   /* ——— Rendu : écran et sprites lumineux ——— */
   const canvas = $('#scene');
@@ -1419,7 +1435,7 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
     $('#defi-sous').textContent = best ? `Ton record du jour : ${fmt(best.score)}` : `${DAILY_LENGTH} astres · le même parcours pour tous`;
     $('#btn-son').setAttribute('aria-pressed', String(S.sound));
     $('#btn-vibe').setAttribute('aria-pressed', String(S.vibe));
-    $('#btn-vibe').hidden = !navigator.vibrate;
+    $('#btn-vibe').hidden = !(NATIF || navigator.vibrate);
   }
 
   function startGame(mode) {
@@ -1567,23 +1583,30 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
       if (json) { h['Content-Type'] = 'application/json'; h.Prefer = 'return=minimal'; }
       return h;
     },
-    base: () => CLASSEMENT_EN_LIGNE.url.replace(/\/+$/, '') + '/rest/v1/scores',
+    table: (name) => CLASSEMENT_EN_LIGNE.url.replace(/\/+$/, '') + '/rest/v1/' + name,
     async send(e) {
-      const r = await fetch(this.base(), { method: 'POST', headers: this.headers(true), body: JSON.stringify(e) });
+      const r = await fetch(this.table('scores'), { method: 'POST', headers: this.headers(true), body: JSON.stringify(e) });
       if (r.ok) return 'ok';
       if (r.status >= 400 && r.status < 500 && r.status !== 429) return 'refuse'; // score invalide : on l'abandonne
       throw new Error('HTTP ' + r.status);
     },
+    // Un joueur par ligne (son meilleur score), du premier au dernier.
     async top(mode, jour) {
       const q = new URLSearchParams({ select: 'joueur,pseudo,score,temps', mode: 'eq.' + mode, order: 'score.desc', limit: '80' });
       if (jour) q.set('jour', 'eq.' + jour);
       const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 6000);
       try {
-        const r = await fetch(this.base() + '?' + q, { headers: this.headers(false), signal: ctrl.signal });
+        const r = await fetch(this.table('scores') + '?' + q, { headers: this.headers(false), signal: ctrl.signal });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const rows = await r.json(), seen = new Set();
-        return rows.filter((x) => !seen.has(x.joueur) && seen.add(x.joueur)).slice(0, 20);
+        return rows.filter((x) => !seen.has(x.joueur) && seen.add(x.joueur));
       } finally { clearTimeout(timer); }
+    },
+    // Signalement d'un pseudo : lisible seulement depuis le tableau de bord Supabase.
+    async report(row) {
+      const body = { joueur: row.joueur, pseudo: row.pseudo, par: S.player };
+      const r = await fetch(this.table('signalements'), { method: 'POST', headers: this.headers(true), body: JSON.stringify(body) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
     },
   };
 
@@ -1610,12 +1633,46 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
   window.addEventListener('online', flushScores);
 
   let boardTab = 'defi', boardToken = 0;
-  function boardRow(pos, name, score, time, mine) {
+  // onPick : ligne d'un autre joueur, touchable pour le signaler.
+  function boardRow(pos, name, score, time, mine, onPick) {
     const li = document.createElement('li');
-    li.className = 'rang' + (mine ? ' moi' : '');
+    const row = onPick ? document.createElement('button') : li;
+    row.className = 'rang' + (mine ? ' moi' : '');
     const cells = [['pos', pos], ['nom', name], ['pts', fmt(score)], ['tps', time != null ? fmtTime(time) : '']];
-    for (const [cls, txt] of cells) { const sp = document.createElement('span'); sp.className = cls; sp.textContent = String(txt); li.append(sp); }
+    for (const [cls, txt] of cells) { const sp = document.createElement('span'); sp.className = cls; sp.textContent = String(txt); row.append(sp); }
+    if (onPick) {
+      row.type = 'button';
+      row.setAttribute('aria-label', `${pos}. ${name}, ${fmt(score)} points. Toucher pour signaler ce pseudo.`);
+      row.addEventListener('click', () => onPick(li));
+      li.append(row);
+    }
     return li;
+  }
+  function askReport(li, r) {
+    const open = $('#liste-classement .signaler');
+    const same = open && open.previousElementSibling === li;
+    open?.remove();
+    if (same) return;
+    const box = document.createElement('li'), p = document.createElement('p');
+    box.className = 'signaler';
+    p.textContent = `Signaler « ${r.pseudo} » comme offensant ? Ce joueur sera masqué de ton classement.`;
+    const yes = document.createElement('button'), no = document.createElement('button');
+    for (const [b, label] of [[yes, 'Signaler'], [no, 'Annuler']]) {
+      b.type = 'button';
+      b.className = 'btn compact';
+      b.append(Object.assign(document.createElement('span'), { textContent: label }));
+    }
+    no.addEventListener('click', () => box.remove());
+    yes.addEventListener('click', () => {
+      if (!S.blocked.includes(r.joueur)) S.blocked.push(r.joueur);
+      while (S.blocked.length > 200) S.blocked.shift();
+      persist();
+      Online.report(r).catch(() => { /* hors ligne : le joueur reste masqué ici */ });
+      renderBoard().then(() => { $('#classement-etat').textContent = 'Merci. Le signalement est envoyé et ce joueur est masqué.'; });
+    });
+    box.append(p, yes, no);
+    li.after(box);
+    yes.focus();
   }
   function boardEmpty(text) {
     const li = document.createElement('li');
@@ -1632,11 +1689,15 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
     if (Online.ready() && navigator.onLine) {
       etat.textContent = 'Chargement…';
       try {
-        const rows = await Online.top(boardTab, boardTab === 'defi' ? today : null);
+        const all = await Online.top(boardTab, boardTab === 'defi' ? today : null);
         if (tok !== boardToken) return;
+        const rows = all.filter((r) => r.joueur === S.player || (!S.blocked.includes(r.joueur) && !rude(r.pseudo))).slice(0, 20);
         etat.textContent = boardTab === 'defi' ? `Défi du ${dayLabel(today)}` : 'Meilleures séries de tous les temps';
         if (!rows.length) list.append(boardEmpty('Personne pour l’instant. À toi de jouer !'));
-        rows.forEach((r, i) => list.append(boardRow(i + 1, r.pseudo, r.score, boardTab === 'defi' ? r.temps : null, r.joueur === S.player)));
+        rows.forEach((r, i) => {
+          const mine = r.joueur === S.player;
+          list.append(boardRow(i + 1, r.pseudo, r.score, boardTab === 'defi' ? r.temps : null, mine, mine ? null : (li) => askReport(li, r)));
+        });
         return;
       } catch (e) {
         if (tok !== boardToken) return;
@@ -1658,12 +1719,29 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
   }
 
   const PSEUDO_RE = /^[\p{L}\p{N} _.\-]{2,14}$/u;
+  // Filtre des grossièretés, aussi appliqué aux pseudos des autres à l'affichage.
+  // Les mots courts ne comptent qu'entiers (« orbite » ne contient pas d'insulte), les racines longues partout.
+  const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', '@': 'a', $: 's', '€': 'e' };
+  const squash = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[0134578@$€]/g, (c) => LEET[c]).replace(/([a-z])\1+/g, '$1');
+  const RUDE_PARTS = ['encul', 'salop', 'connard', 'connass', 'batard', 'enfoir', 'niquer', 'couill', 'merde', 'putain',
+    'pedophil', 'tapette', 'bougnoul', 'youpin', 'negre', 'negro', 'nigga', 'nazi', 'hitler', 'fuck', 'bitch', 'whore',
+    'cunt', 'pussy', 'asshole', 'shit', 'porn', 'sexe', 'penis', 'vagin', 'zgeg', 'kahba', 'zebi', 'sharmout', 'mierda', 'cabron'].map(squash);
+  const RUDE_WORDS = new Set(['con', 'cons', 'conne', 'pute', 'putes', 'puta', 'bite', 'bites', 'nique', 'pd', 'pedale', 'fdp', 'ntm', 'tg',
+    'cul', 'chatte', 'viol', 'dick', 'cock', 'fag', 'sex', 'nigger', 'hmar'].map(squash));
+  function rude(p) {
+    const words = squash(String(p)).split(/[^a-z]+/).filter(Boolean), joined = words.join('');
+    // Lettres espacées (« f u c k ») : on recolle ; sinon chaque mot seul, pour ne pas fâcher « Amer Deluxe ».
+    const pieces = words.length > 1 && words.every((w) => w.length <= 2) ? [joined] : words;
+    return words.some((w) => RUDE_WORDS.has(w)) || RUDE_WORDS.has(joined) || pieces.some((w) => RUDE_PARTS.some((r) => w.includes(r)));
+  }
   function bindPseudo(form, after) {
     const input = form.querySelector('input'), note = form.querySelector('.note');
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const v = input.value.trim().replace(/\s+/g, ' ');
       if (!PSEUDO_RE.test(v)) { note.textContent = 'De 2 à 14 caractères : lettres, chiffres, espace, point ou tiret.'; return; }
+      if (rude(v)) { note.textContent = 'Ce pseudo n’est pas accepté. Choisis-en un autre.'; return; }
       S.pseudo = v;
       input.value = v;
       persist();
@@ -1760,6 +1838,18 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
     }
     showScreen(name);
   }
+  function closeSub() {
+    showScreen(backTo);
+    if (backTo === 'menu') refreshMenu();
+  }
+  // Touche Échap et bouton retour d'Android. Renvoie false quand il n'y a plus rien à fermer (menu principal).
+  function goBack() {
+    if (G.playing) { if (G.paused) resume(); else pause(); return true; }
+    if (current === 'apparences' || current === 'succes' || current === 'classement') closeSub();
+    else if (current === 'bilan' || current === 'defi') showMenu();
+    else if (current === 'menu') return false;
+    return true;
+  }
 
   /* ——— Commandes ——— */
   canvas.addEventListener('pointerdown', (e) => {
@@ -1772,24 +1862,30 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
       e.preventDefault();
       Sound.ensure();
       release(false);
-    } else if ((e.code === 'Escape' || e.code === 'KeyP') && G.playing) {
+    } else if (e.code === 'Escape') {
+      goBack();
+    } else if (e.code === 'KeyP' && G.playing) {
       if (G.paused) resume(); else pause();
     }
   });
+  if (NATIF?.getPlatform() === 'android') {
+    NATIF.addListener('App', 'backButton', () => {
+      if (!goBack()) NATIF.nativePromise('App', 'minimizeApp').catch(() => {});
+    });
+  }
+  // Appli en arrière-plan ou onglet caché : pause et silence.
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) return;
+    if (!document.hidden) { if (S.sound) Sound.setOn(true); return; }
     if (dirty) persist();
     if (G.playing && !G.paused) pause();
+    Sound.setOn(false);
   });
   window.addEventListener('pagehide', () => { if (dirty) persist(); });
 
   $('#btn-zen').addEventListener('click', () => startGame('zen'));
   $('#btn-defi').addEventListener('click', () => startGame('daily'));
   document.querySelectorAll('[data-ouvre]').forEach((b) => b.addEventListener('click', () => openSub(b.dataset.ouvre, 'menu')));
-  document.querySelectorAll('[data-retour]').forEach((b) => b.addEventListener('click', () => {
-    showScreen(backTo);
-    if (backTo === 'menu') refreshMenu();
-  }));
+  document.querySelectorAll('[data-retour]').forEach((b) => b.addEventListener('click', closeSub));
   $('#btn-pause').addEventListener('click', (e) => { e.currentTarget.blur(); pause(); });
   $('#btn-reprendre').addEventListener('click', resume);
   $('#btn-recommencer').addEventListener('click', () => startGame('daily'));
@@ -1833,8 +1929,8 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
     $('#btn-installer').hidden = true;
   });
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (isIOS && !navigator.standalone && !IN_CLAUDE) $('#astuce-ios').hidden = false;
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !IN_CLAUDE) {
+  if (isIOS && !navigator.standalone && !IN_CLAUDE && !NATIF) $('#astuce-ios').hidden = false;
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !IN_CLAUDE && !NATIF) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* hors ligne indisponible ici */ });
   }
 

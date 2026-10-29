@@ -1,2 +1,10 @@
 # Généré par construire.mjs (localement et par GitHub à chaque publication)
 site/
+www/
+# Installé par « npm ci »
+node_modules/
+# Clés de signature : à garder hors du dépôt, en lieu sûr
+*.keystore
+*.jks
+*.p12
+*.p8

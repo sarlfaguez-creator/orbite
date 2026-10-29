@@ -1,7 +1,8 @@
-// Prépare le dossier « site/ », prêt à mettre en ligne :
-// page complète, manifeste d'appli, service worker (jeu hors ligne) et icônes PNG générées par le code.
+// Prépare, à partir de jeu.html :
+// - « site/ », prêt à mettre en ligne : page complète, manifeste, service worker (jeu hors ligne), icônes PNG générées par le code ;
+// - « www/ », le contenu des applis Android et iPhone (Capacitor), et leurs icônes dans android/ et ios/.
 // Utilisation : node construire.mjs
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -16,21 +17,13 @@ const source = readFileSync(join(ici, 'jeu.html'), 'utf8');
 const titre = source.match(/<title>[\s\S]*?<\/title>/)?.[0] ?? '<title>Orbite</title>';
 const style = source.match(/<style>[\s\S]*?<\/style>/)?.[0] ?? '';
 const corps = source.replace(titre, '').replace(style, '').replace(/<meta name="claude:[^>]*>\s*/g, '').trim();
-const page = `<!doctype html>
+const pageComplete = (viewport, tete) => `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="${viewport}">
 ${titre}
-<meta name="description" content="Glisse d’astre en astre, sans fin. Un jeu néon jouable hors ligne.">
-<meta name="theme-color" content="#04050d">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icone.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icone-192.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Orbite">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+${tete}
 ${style}
 </head>
 <body>
@@ -38,6 +31,17 @@ ${corps}
 </body>
 </html>
 `;
+const page = pageComplete('width=device-width, initial-scale=1, viewport-fit=cover', `<meta name="description" content="Glisse d’astre en astre, sans fin. Un jeu néon jouable hors ligne.">
+<meta name="theme-color" content="#04050d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Orbite">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`);
+// Dans l'appli, tout est déjà sur le téléphone : ni manifeste ni service worker, et pas de zoom à deux doigts.
+const pageAppli = pageComplete('width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no', '<meta name="color-scheme" content="dark">');
 
 /* ——— 2. Les icônes (PNG encodé à la main, sans dépendance) ——— */
 const tableCrc = new Uint32Array(256).map((_, n) => {
@@ -58,14 +62,14 @@ function bloc(type, data) {
   crc.writeUInt32BE(crc32(td));
   return Buffer.concat([len, td, crc]);
 }
-function png(taille, pixel) {
-  // RVB sans transparence, filtre « Up » par ligne : les dégradés se compressent bien mieux.
-  const ligne = taille * 3 + 1;
+function png(taille, pixel, alpha = false) {
+  // RVB (ou RVBA si alpha), filtre « Up » par ligne : les dégradés se compressent bien mieux.
+  const canaux = alpha ? 4 : 3, ligne = taille * canaux + 1;
   const brut = Buffer.alloc(ligne * taille);
-  let dessus = new Uint8Array(taille * 3);
+  let dessus = new Uint8Array(taille * canaux);
   for (let y = 0; y < taille; y++) {
-    const rangee = new Uint8Array(taille * 3);
-    for (let x = 0; x < taille; x++) rangee.set(pixel((x + 0.5) / taille, (y + 0.5) / taille, taille), x * 3);
+    const rangee = new Uint8Array(taille * canaux);
+    for (let x = 0; x < taille; x++) rangee.set(pixel((x + 0.5) / taille, (y + 0.5) / taille, taille), x * canaux);
     brut[y * ligne] = 2;
     for (let i = 0; i < rangee.length; i++) brut[y * ligne + 1 + i] = (rangee[i] - dessus[i]) & 255;
     dessus = rangee;
@@ -73,7 +77,7 @@ function png(taille, pixel) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(taille, 0);
   ihdr.writeUInt32BE(taille, 4);
-  ihdr[8] = 8; ihdr[9] = 2;
+  ihdr[8] = 8; ihdr[9] = alpha ? 6 : 2;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     bloc('IHDR', ihdr), bloc('IDAT', deflateSync(brut, { level: 9 })), bloc('IEND', Buffer.alloc(0)),
@@ -165,13 +169,15 @@ self.addEventListener('fetch', (e) => {
 });
 `;
 
-/* ——— 4. Écriture ——— */
+/* ——— 4. Écriture du site ——— */
 const fichiers = {
   'index.html': page,
   'manifest.webmanifest': manifesteTexte,
   'sw.js': sw,
   'icone.svg': svg,
   ...icones,
+  // Politique de confidentialité, demandée par le Play Store et l'App Store (lien dans le menu du jeu).
+  'confidentialite.html': readFileSync(join(ici, 'confidentialite.html')),
 };
 let total = 0;
 for (const [nom, contenu] of Object.entries(fichiers)) {
@@ -181,3 +187,33 @@ for (const [nom, contenu] of Object.entries(fichiers)) {
   console.log(`  ${nom.padEnd(22)} ${ko.toFixed(1).padStart(6)} Ko`);
 }
 console.log(`  ${'total'.padEnd(22)} ${total.toFixed(1).padStart(6)} Ko  (version ${version})`);
+
+/* ——— 5. Les applis Android et iPhone ——— */
+mkdirSync(join(ici, 'www'), { recursive: true });
+writeFileSync(join(ici, 'www', 'index.html'), pageAppli);
+console.log('  www/index.html : contenu des applis');
+
+// Icônes et écran de lancement, recalculés à chaque construction pour rester fidèles au dessin ci-dessus.
+const nuit = () => [4, 5, 13];
+const rond = (dessin) => (u, v, n) => {
+  const a = Math.min(1, Math.max(0, (0.5 - Math.hypot(u - 0.5, v - 0.5)) * n + 0.5));
+  return [...dessin(u, v, n), Math.round(a * 255)];
+};
+const android = join(ici, 'android', 'app', 'src', 'main', 'res');
+if (existsSync(android)) {
+  // Icône classique (Android 7), ronde, et premier plan des icônes adaptatives (108 dp, dont 72 visibles).
+  for (const [dossier, n] of [['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi', 144], ['xxxhdpi', 192]]) {
+    writeFileSync(join(android, `mipmap-${dossier}`, 'ic_launcher.png'), png(n, icone(1)));
+    writeFileSync(join(android, `mipmap-${dossier}`, 'ic_launcher_round.png'), png(n, rond(icone(1)), true));
+    writeFileSync(join(android, `mipmap-${dossier}`, 'ic_launcher_foreground.png'), png(n * 2.25, icone(0.72)));
+  }
+  console.log('  android/ : icônes');
+}
+const ios = join(ici, 'ios', 'App', 'App', 'Assets.xcassets');
+if (existsSync(ios)) {
+  writeFileSync(join(ios, 'AppIcon.appiconset', 'AppIcon-512@2x.png'), png(1024, icone(1)));
+  // Écran de lancement : la couleur de fond du jeu, étirée sur tout l'écran.
+  const lancement = png(16, nuit);
+  for (const f of ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png']) writeFileSync(join(ios, 'Splash.imageset', f), lancement);
+  console.log('  ios/ : icône et écran de lancement');
+}
