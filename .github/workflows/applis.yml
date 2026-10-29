@@ -6,6 +6,8 @@ name: Fabriquer les applis
 on:
   push:
     branches: [main]
+    # Les captures et les guides ne changent rien aux applis.
+    paths-ignore: ['fiches/**', '**.md']
   workflow_dispatch:
 
 permissions:
