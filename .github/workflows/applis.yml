@@ -57,6 +57,8 @@ jobs:
           echo "$ANDROID_CLE_BASE64" | base64 -d > "$RUNNER_TEMP/orbite.p12"
           ANDROID_CLE_FICHIER="$RUNNER_TEMP/orbite.p12" ./gradlew assembleRelease bundleRelease --no-daemon
           rm "$RUNNER_TEMP/orbite.p12"
+          # L'empreinte doit être celle notée dans le LISEZ-MOI de la clé.
+          "$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep SHA-256
       - uses: actions/upload-artifact@v6
         if: env.ANDROID_CLE_BASE64 != ''
         with:
