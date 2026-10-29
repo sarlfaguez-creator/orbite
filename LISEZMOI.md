@@ -14,10 +14,16 @@ Un jeu néon infini : ta comète tourne autour d’un astre. Touche l’écran p
 | Fichier | Rôle |
 |---|---|
 | `jeu.html` | Le jeu entier (code, styles, sons). **C’est le seul fichier à modifier.** |
-| `construire.mjs` | Fabrique le dossier `site/` à partir de `jeu.html`. |
-| `site/` | Le dossier généré, à tester en local (pas envoyé sur GitHub). |
-| `supabase.sql` | La table du classement en ligne (optionnel). |
+| `construire.mjs` | Fabrique `site/` (le site) et `www/` (le contenu des applis) à partir de `jeu.html`, ainsi que toutes les icônes. |
+| `site/`, `www/` | Les dossiers générés, à tester en local (pas envoyés sur GitHub). |
+| `confidentialite.html` | La politique de confidentialité, publiée avec le site. |
+| `supabase.sql` | Les tables du classement en ligne et des signalements (optionnel). |
+| `android/`, `ios/`, `capacitor.config.json`, `package.json` | Les applis Android et iPhone (Capacitor). |
+| `PUBLIER-STORES.md` | Le guide pour le Play Store et l’App Store, avec les textes des fiches. |
+| `fiches/` | Icône, captures d’écran et image de présentation pour les stores. |
 | `.github/workflows/publier.yml` | La publication automatique sur GitHub Pages. |
+| `.github/workflows/applis.yml` | La fabrication automatique des applis. |
+| `.github/workflows/captures.yml`, `outils/captures.mjs` | Les captures d’écran des fiches, à relancer depuis l’onglet Actions. |
 
 ## Mettre à jour le jeu en ligne
 
@@ -52,6 +58,12 @@ Puis ouvre http://localhost:8765
 
 Les joueurs peuvent **installer** le jeu comme une appli. Sur Android, le bouton « Installer l’appli » apparaît dans le menu. Sur iPhone : Partager → « Sur l’écran d’accueil ».
 
+## Les applis Android et iPhone
+
+Les vraies applis, pour le Play Store et l’App Store, sont fabriquées par GitHub à chaque modification (onglet **Actions**, « Fabriquer les applis »). Le jeu y est inclus : zéro donnée, même au premier lancement. Elles ajoutent les vibrations natives et le bouton retour d’Android. Tout le reste est le même `jeu.html`.
+
+Pour les publier, suis [PUBLIER-STORES.md](PUBLIER-STORES.md).
+
 Pour être découvert par plus de monde, tu peux aussi publier le contenu de `site/` sur **itch.io**, zippé comme jeu HTML. Le mode hors ligne y est cependant moins fiable.
 
 ## Activer le classement mondial (optionnel)
@@ -68,3 +80,5 @@ Pour être découvert par plus de monde, tu peux aussi publier le contenu de `si
 Les scores obtenus hors ligne sont mis de côté et envoyés au retour de la connexion.
 
 Comme pour tout jeu dont le code s’exécute chez le joueur, un tricheur motivé peut envoyer un faux score. Tu peux supprimer ces lignes depuis le tableau de bord Supabase.
+
+**Pseudos** : les grossièretés sont refusées et masquées. Dans le classement, toucher la ligne d’un autre joueur permet de le signaler. Il disparaît alors pour toi, et pour tout le monde dès que 3 personnes l’ont signalé. Les signalements sont dans **Table Editor → signalements**. Pour rétablir un joueur, supprime ses lignes de cette table.

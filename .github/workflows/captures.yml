@@ -1,0 +1,29 @@
+# Prend les captures d'écran et l'image de présentation pour les fiches des stores (à lancer depuis l'onglet Actions).
+# Sur un Mac : les polices sont celles de l'iPhone. Le résultat est l'artefact « fiches-stores ».
+name: Captures pour les stores
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  captures:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node construire.mjs
+      - run: npm install --no-save puppeteer-core@24
+      - name: Jouer et capturer
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory site &
+          sleep 2
+          node outils/captures.mjs fiches
+      - uses: actions/upload-artifact@v5
+        with:
+          name: fiches-stores
+          path: fiches

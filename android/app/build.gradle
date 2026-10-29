@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Le numéro de version augmente à chaque construction sur GitHub (obligatoire pour chaque envoi au Play Store).
-        versionCode (System.getenv("NUMERO_VERSION") ?: "1").toInteger()
+        versionCode = Integer.parseInt(System.getenv("NUMERO_VERSION") ?: "1")
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
