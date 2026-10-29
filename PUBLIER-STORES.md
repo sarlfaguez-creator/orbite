@@ -4,7 +4,8 @@ Les applis sont fabriquées automatiquement par GitHub à chaque modification en
 
 | Ce qui est prêt | Où |
 |---|---|
-| Appli Android de test (APK) | Actions → dernier passage → **orbite-android-test** |
+| Appli Android de test (APK, signée) | Actions → dernier passage → **orbite-android-test** |
+| Fichier à envoyer au Play Store (AAB, signé) | Actions → dernier passage → **orbite-play-store** |
 | Capture de l’appli iPhone lancée sur un simulateur | Actions → dernier passage → **orbite-iphone-capture** |
 | Captures pour les fiches, image de présentation, icône 512 | dossier `fiches/` |
 | Politique de confidentialité | https://sarlfaguez-creator.github.io/orbite/confidentialite.html |
@@ -18,7 +19,7 @@ Identifiant de l’appli (le même sur les deux stores, définitif une fois publ
 2. En bas, télécharge **orbite-android-test** (un .zip), puis décompresse-le : tu obtiens un fichier `.apk`.
 3. Envoie-le sur ton téléphone Android et ouvre-le. Android demande d’autoriser l’installation depuis cette source : accepte.
 
-Tant que la clé de signature n’est pas en place, chaque nouvelle version de test demande de désinstaller la précédente (ta progression dans l’appli de test est alors perdue).
+L’appli de test est signée avec la clé du Play Store : chaque nouvelle version s’installe par-dessus la précédente, sans perdre ta progression. Si tu avais installé une toute première version de test (avant la clé), désinstalle-la une fois.
 
 ---
 
@@ -29,18 +30,19 @@ Tant que la clé de signature n’est pas en place, chaque nouvelle version de t
 1. Va sur https://play.google.com/console et choisis un compte **personnel**.
 2. Paie les 25 $ (une seule fois) et fais vérifier ton identité. Compte quelques jours.
 
-### 2. Mettre la clé de signature dans GitHub
+### 2. La clé de signature (déjà en place)
 
-Le Play Store exige que chaque version soit signée avec la même clé. Il en faut une avant le premier envoi. Elle se range dans **Settings → Secrets and variables → Actions** du dépôt, sous deux noms :
+Le Play Store exige que chaque version soit signée avec la même clé. Elle a été créée le 30 octobre 2026 et rangée dans **Settings → Secrets and variables → Actions** du dépôt, sous deux noms :
 
 | Secret | Contenu |
 |---|---|
 | `ANDROID_CLE_BASE64` | le fichier de clé, encodé en base64 |
 | `ANDROID_CLE_MOT_DE_PASSE` | son mot de passe |
 
-Dès que ces secrets existent, GitHub fabrique aussi **orbite-play-store** (le fichier `.aab` à envoyer au Play Store), et l’APK de test garde la même signature d’une version à l’autre.
+GitHub fabrique donc aussi **orbite-play-store**, le fichier `.aab` à envoyer au Play Store. L’empreinte SHA-256 de la clé, affichée dans le journal de chaque fabrication, est :
+`0C:51:70:86:72:E5:B6:F4:E3:BD:FA:01:94:65:94:9C:A2:E6:9E:9D:91:0C:83:7A:79:9F:0B:A7:38:F5:4C:B8`
 
-Garde une copie du fichier de clé et du mot de passe en lieu sûr (pas dans le dépôt). Si tu les perds, le Play Store permet de déclarer une nouvelle clé d’envoi, mais c’est une démarche auprès de Google.
+Les secrets GitHub ne peuvent pas être relus. Garde donc la copie de la clé (`orbite-signature.p12` et `mot-de-passe.txt`) en lieu sûr, hors du dépôt. Si tu la perds, la Play Console permet de déclarer une nouvelle clé d’envoi (**Intégrité de l’appli**), mais c’est une démarche auprès de Google.
 
 ### 3. Créer l’appli dans la Play Console
 
