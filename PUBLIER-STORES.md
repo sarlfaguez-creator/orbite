@@ -165,6 +165,9 @@ Infini et sans défaite : rater ne fait que remettre ta série à zéro. Enchaî
 DÉFI DU JOUR
 Chaque jour, un parcours de 40 astres, le même pour tous les joueurs. Ton fantôme rejoue ta meilleure course à côté de toi : bats-le, puis compare-toi au classement mondial.
 
+DES ASTRES QUI ONT UN NOM
+Chaque astre que tu atteins reçoit son nom. Les astres dorés portent celui d’une vraie étoile du ciel : Véga, Sirius, Bételgeuse… 120 à retrouver et à collectionner dans ton carnet.
+
 À COLLECTIONNER
 Ramasse les poussières d’étoile pour débloquer 8 apparences de comète, et décroche 14 succès.
 

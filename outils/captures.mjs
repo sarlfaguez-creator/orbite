@@ -83,6 +83,10 @@ await clic('[data-ouvre="succes"]');
 await sleep(300);
 await shot('6-succes', false);
 await clic('#ecran-succes [data-retour]');
+await clic('[data-ouvre="carnet"]');
+await sleep(300);
+await shot('7-carnet', false);
+await clic('#ecran-carnet [data-retour]');
 
 // Image de présentation du Play Store (1024 × 500) : le logo sur la démo du menu.
 const f = await browser.newPage();

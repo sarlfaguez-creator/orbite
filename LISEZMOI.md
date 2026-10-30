@@ -7,6 +7,7 @@ Un jeu néon infini : ta comète tourne autour d’un astre. Touche l’écran p
 - **Voyage zen** : infini, sans défaite. Rater ne fait que remettre ta série à zéro. Zones successives, trous noirs, astres mobiles.
 - **Défi du jour** : 40 astres, le même parcours pour tout le monde, chronométré. Ton **fantôme** rejoue ta meilleure course.
 - **Poussières d’étoile** à ramasser → 8 **apparences** à débloquer, 14 **succès**.
+- **Des astres qui ont un nom** : chaque astre atteint reçoit le sien. Les astres dorés portent celui d’une vraie étoile (120 à retrouver), à collectionner dans le **carnet**.
 - **Classement** : local sur l’appareil, ou mondial si tu actives Supabase (voir plus bas).
 
 ## Les fichiers

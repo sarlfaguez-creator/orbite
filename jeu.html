@@ -154,7 +154,7 @@ body {
 .btn.discret > span { font-size: 15px; font-weight: 500; }
 .btn.compact { min-height: 44px; padding: 10px 14px; align-items: center; }
 .btn.compact > span { font-size: 15px; }
-.menu-ligne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.menu-ligne { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .menu-ligne .btn { padding: 12px 6px; }
 .menu-ligne .btn > span { font-size: 14px; }
 .menu-ligne .btn > small { font-family: var(--f-chiffres); font-size: 12px; }
@@ -220,6 +220,20 @@ h2 { margin: 0; font: 400 19px/1.2 var(--f-titre); letter-spacing: 0.18em; text-
 .succes .gain { font: 600 13px var(--f-chiffres); color: var(--brume); white-space: nowrap; }
 .succes.obtenu { border-color: rgba(255, 198, 92, 0.35); }
 .succes.obtenu .marque, .succes.obtenu .gain { color: var(--ambre); }
+
+/* Carnet */
+.sous-titre {
+  margin: 6px 0 0; display: flex; justify-content: space-between; gap: 12px;
+  font: 600 12px/1.2 var(--f-texte); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brume);
+}
+.sous-titre .compte { font-family: var(--f-chiffres); letter-spacing: 0; color: var(--ambre); }
+.pastilles { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pastilles li {
+  padding: 5px 11px; border: 1px solid var(--trait); border-radius: 999px; font-size: 13px;
+  color: var(--c, var(--encre)); border-color: color-mix(in srgb, var(--c, #96b4ff) 35%, transparent);
+}
+.pastilles li.reelle { --c: var(--ambre); }
+.pastilles li.vide { border: 0; padding: 4px 0; color: var(--brume); }
 
 /* Classement */
 .onglets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -296,6 +310,7 @@ button.rang:focus-visible, .lien:focus-visible {
     <div class="menu-ligne">
       <button class="btn discret" type="button" data-ouvre="apparences"><span>Apparences</span></button>
       <button class="btn discret" type="button" data-ouvre="succes"><span>Succès</span><small id="compte-succes">0/14</small></button>
+      <button class="btn discret" type="button" data-ouvre="carnet"><span>Carnet</span><small id="compte-carnet">0/120</small></button>
       <button class="btn discret" type="button" data-ouvre="classement"><span>Classement</span></button>
     </div>
     <div class="menu-pied">
@@ -380,6 +395,18 @@ button.rang:focus-visible, .lien:focus-visible {
     <p id="succes-compte" class="note"></p>
     <ul id="liste-succes" class="liste"></ul>
     <p id="succes-stats" class="note"></p>
+  </div>
+</section>
+
+<section id="ecran-carnet" class="ecran voile" hidden>
+  <div class="panneau">
+    <div class="panneau-tete"><h2>Carnet</h2><button class="btn compact" type="button" data-retour><span>Retour</span></button></div>
+    <p id="carnet-total" class="note"></p>
+    <h3 class="sous-titre"><span>Vraies étoiles</span><span id="carnet-reels-compte" class="compte"></span></h3>
+    <p class="note">Les astres dorés portent le nom d’une vraie étoile du ciel. Trouve-les toutes.</p>
+    <ul id="carnet-reels" class="pastilles"></ul>
+    <h3 class="sous-titre"><span>Derniers astres atteints</span></h3>
+    <ul id="carnet-derniers" class="pastilles"></ul>
   </div>
 </section>
 
@@ -485,11 +512,14 @@ button.rang:focus-visible, .lien:focus-visible {
     dust: 0, dustTotal: 0, starsTotal: 0, perfectsTotal: 0, bestSeries: 0, bestScore: 0,
     skin: 'comete', owned: ['comete'], ach: {}, days: [], history: {},
     sound: true, vibe: true, pseudo: '', player: newId(), pending: [], tuto: 0, blocked: [],
+    reels: [], vus: [], // carnet : vraies étoiles trouvées, derniers astres nommés
   });
   const S = Object.assign(defaults(), store.get(SAVE_KEY) || {});
   if (!Array.isArray(S.owned) || !S.owned.length) S.owned = ['comete'];
   if (!Array.isArray(S.days)) S.days = [];
   if (!Array.isArray(S.blocked)) S.blocked = [];
+  if (!Array.isArray(S.reels)) S.reels = [];
+  if (!Array.isArray(S.vus)) S.vus = [];
   if (!Array.isArray(S.pending)) S.pending = [];
   if (!S.ach || typeof S.ach !== 'object') S.ach = {};
   if (!S.history || typeof S.history !== 'object') S.history = {};
@@ -722,10 +752,11 @@ button.rang:focus-visible, .lien:focus-visible {
   };
   const P = [];  // particules
   const TX = []; // textes flottants
+  const LB = []; // noms des astres qu'on vient d'atteindre
 
   /* ——— Génération procédurale de l'univers ——— */
   function makeCourse(seed, mode) {
-    return { rng: mulberry32(seed), mode, stars: [], holes: [], dusts: [], recent: [], recentHoles: [], last: null, count: 0, done: false };
+    return { seed, rng: mulberry32(seed), mode, stars: [], holes: [], dusts: [], recent: [], recentHoles: [], last: null, count: 0, done: false };
   }
   // 0 = facile, 1 = difficulté maximale
   const difficulty = (C, i) => (C.mode === 'daily' ? clamp(0.18 + i / 50, 0, 0.92) : clamp(i / 220, 0, 1));
@@ -833,6 +864,63 @@ button.rang:focus-visible, .lien:focus-visible {
   }
   const starHue = (s) => (s.kind === 'gold' || s.kind === 'portal' ? 45 : mod(G.hue + s.hueOff, 360));
 
+  /* ——— Noms des astres ——— */
+  // Les astres dorés et le portail du défi portent le nom d'une vraie étoile (à collectionner dans le carnet),
+  // les autres un nom inventé. Les noms dépendent du parcours : au défi du jour, tout le monde voit les mêmes.
+  const REAL_STARS = [
+    'Sirius', 'Canopus', 'Arcturus', 'Véga', 'Capella', 'Rigel', 'Procyon', 'Achernar', 'Bételgeuse', 'Hadar',
+    'Altaïr', 'Acrux', 'Aldébaran', 'Antarès', 'Spica', 'Pollux', 'Fomalhaut', 'Deneb', 'Mimosa', 'Régulus',
+    'Adhara', 'Castor', 'Gacrux', 'Shaula', 'Bellatrix', 'Elnath', 'Miaplacidus', 'Alnilam', 'Alnaïr', 'Alnitak',
+    'Alioth', 'Dubhe', 'Mirfak', 'Wezen', 'Sargas', 'Avior', 'Alkaïd', 'Menkalinan', 'Atria', 'Alhéna',
+    'Peacock', 'Mirzam', 'Alphard', 'Polaris', 'Hamal', 'Algieba', 'Diphda', 'Nunki', 'Menkent', 'Mirach',
+    'Alphératz', 'Rasalhague', 'Kochab', 'Saïph', 'Dénébola', 'Algol', 'Suhail', 'Alphecca', 'Mintaka', 'Sadr',
+    'Eltanin', 'Schédar', 'Naos', 'Almach', 'Caph', 'Izar', 'Dschubba', 'Merak', 'Ankaa', 'Enif',
+    'Scheat', 'Sabik', 'Phecda', 'Aludra', 'Markab', 'Acrab', 'Mizar', 'Alcor', 'Thuban', 'Albiréo',
+    'Algorab', 'Zosma', 'Chertan', 'Rasalgethi', 'Alderamin', 'Errai', 'Sheratan', 'Mérope', 'Maïa', 'Électre',
+    'Taygète', 'Alcyone', 'Atlas', 'Pléione', 'Célaéno', 'Astérope', 'Tarazed', 'Alshain', 'Sadalmelik', 'Sadalsuud',
+    'Skat', 'Ruchbah', 'Menkar', 'Zaurak', 'Cursa', 'Arneb', 'Nihal', 'Phact', 'Wasat', 'Mebsuta',
+    'Tejat', 'Porrima', 'Vindemiatrix', 'Unukalhai', 'Kornephoros', 'Ascella', 'Talitha', 'Megrez', 'Sulafat', 'Rastaban',
+  ];
+  const SYL_DEBUT = ['a', 'e', 'i', 'o', 'ae', 'ca', 'ce', 'da', 'ela', 'eri', 'hy', 'ka', 'ke', 'la', 'le', 'li', 'lu', 'ma', 'me', 'mi',
+    'na', 'ne', 'ni', 'no', 'ny', 'pha', 'ra', 're', 'ri', 'sa', 'se', 'si', 'sy', 'ta', 'tha', 'thé', 'va', 've', 'vi', 'xa', 'ya', 'zé'];
+  const SYL_LIEN = ['l', 'r', 'n', 's', 'v', 'th', 'lv', 'rn', 'nd', 'ph', 'm', 'lm', 'ss', 'ld', 'z'];
+  const SYL_VOYELLE = ['a', 'e', 'i', 'o', 'ia', 'é'];
+  const SYL_FIN = ['a', 'ae', 'ia', 'is', 'os', 'on', 'or', 'ys', 'ée', 'ine', 'ane', 'ion', 'iel', 'ara', 'ora', 'ène', 'ix', 'ide',
+    'elle', 'ura', 'ar', 'oé', 'é', 'eth'];
+  function inventName(seed, id) {
+    let n = '';
+    for (let salt = 0; salt < 20; salt++) {
+      const r = mulberry32(hash3(seed, id, 7 + salt)), pick = (a) => a[Math.floor(r() * a.length)];
+      n = pick(SYL_DEBUT) + pick(SYL_LIEN) + (r() < 0.3 ? pick(SYL_VOYELLE) + pick(SYL_LIEN) : '') + pick(SYL_FIN);
+      n = n.charAt(0).toUpperCase() + n.slice(1);
+      if (n.length <= 11 && !rude(n)) break;
+    }
+    return n;
+  }
+  function starName(s) {
+    if (s.name) return s.name;
+    const C = G.course;
+    if (s.kind === 'gold' || s.kind === 'portal') {
+      // Voyage zen : de préférence une vraie étoile pas encore trouvée. Défi du jour : la même pour tous.
+      const left = REAL_STARS.filter((n) => !S.reels.includes(n));
+      const pool = C.mode === 'daily' || !left.length ? REAL_STARS : left;
+      s.name = pool[hash3(C.seed, s.id, 99) % pool.length];
+      s.real = true;
+    } else s.name = inventName(C.seed, s.id);
+    return s.name;
+  }
+  function nameStar(s, h) {
+    const name = starName(s), hue = s.real ? 45 : Math.round(h);
+    LB.push({ s, text: name.toUpperCase(), h: hue, real: s.real, life: 2.8, max: 2.8 });
+    if (LB.length > 4) LB.shift();
+    S.vus.unshift({ n: name, h: hue, r: !!s.real });
+    if (S.vus.length > 16) S.vus.length = 16;
+    if (s.real && !S.reels.includes(name)) {
+      S.reels.push(name);
+      toast(`Vraie étoile : ${name}`, `${S.reels.length}/${REAL_STARS.length}`);
+    }
+  }
+
   /* ——— Comète ——— */
   function placeComet(s, angle) {
     const c = G.comet;
@@ -888,6 +976,7 @@ button.rang:focus-visible, .lien:focus-visible {
       }
     }
     if (G.demo) return;
+    nameStar(s, h);
     G.combo++;
     G.bestCombo = Math.max(G.bestCombo, G.combo);
     G.starsHit++;
@@ -906,7 +995,7 @@ button.rang:focus-visible, .lien:focus-visible {
       buzz(15);
     } else buzz(8);
     Sound.capture(G.combo, s.kind === 'gold');
-    if (G.combo % 10 === 0) floatText(s.x, s.y + s.R + 16, `Série ${G.combo} !`, 'hsl(315,100%,78%)', 14, 1.5);
+    if (G.combo % 10 === 0) floatText(s.x, s.y + s.R + 46, `Série ${G.combo} !`, 'hsl(315,100%,78%)', 14, 1.5);
     if (G.mode === 'zen') S.bestSeries = Math.max(S.bestSeries, G.combo);
     unlock('envol');
     if (G.combo >= 10) unlock('serie10');
@@ -1107,9 +1196,11 @@ button.rang:focus-visible, .lien:focus-visible {
       p.vx *= drag; p.vy *= drag;
       p.x += p.vx * dt; p.y += p.vy * dt;
     }
-    for (let i = TX.length - 1; i >= 0; i--) {
-      TX[i].life -= dt;
-      if (TX[i].life <= 0) TX.splice(i, 1);
+    for (const list of [TX, LB]) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        list[i].life -= dt;
+        if (list[i].life <= 0) list.splice(i, 1);
+      }
     }
   }
 
@@ -1319,6 +1410,21 @@ button.rang:focus-visible, .lien:focus-visible {
     }
     ctx.globalAlpha = 1;
   }
+  // Le nom s'écrit doucement sous l'astre atteint, puis s'efface.
+  function drawNames() {
+    if (!LB.length) return;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 13px ${FONT_TXT}`;
+    const spaced = 'letterSpacing' in ctx;
+    if (spaced) ctx.letterSpacing = '3px';
+    for (const l of LB) {
+      const a = Math.min(1, (l.max - l.life) / 0.35, l.life / 0.9);
+      ctx.fillStyle = `hsla(${l.h},100%,${l.real ? 72 : 85}%,${(a * 0.92).toFixed(3)})`;
+      ctx.fillText(l.real ? `★ ${l.text}` : l.text, l.s.x, l.s.y + l.s.R + 22);
+    }
+    if (spaced) ctx.letterSpacing = '0px';
+  }
 
   function render() {
     const cx = G.cam.x + G.cam.sx, cy = G.cam.y + G.cam.sy;
@@ -1331,6 +1437,7 @@ button.rang:focus-visible, .lien:focus-visible {
     for (const b of C.holes) if (b.y > top - b.inf && b.y < bottom + b.inf) drawHole(b);
     drawDusts(C.dusts, top, bottom);
     for (const s of C.stars) if (s.y > top - s.R - 30 && s.y < bottom + s.R + 30) drawStar(s);
+    drawNames();
     drawGhost();
     drawComet();
     drawParticles();
@@ -1399,7 +1506,7 @@ button.rang:focus-visible, .lien:focus-visible {
   /* ——— Écrans ——— */
   const screens = {
     menu: $('#ecran-menu'), pause: $('#ecran-pause'), bilan: $('#ecran-bilan'), defi: $('#ecran-defi'),
-    apparences: $('#ecran-apparences'), succes: $('#ecran-succes'), classement: $('#ecran-classement'),
+    apparences: $('#ecran-apparences'), succes: $('#ecran-succes'), carnet: $('#ecran-carnet'), classement: $('#ecran-classement'),
   };
   let current = null, backTo = 'menu';
   function showScreen(name) {
@@ -1409,6 +1516,7 @@ button.rang:focus-visible, .lien:focus-visible {
 
   function startDemo() {
     Object.assign(G, { mode: 'menu', demo: true, playing: false, paused: false, coast: false, t: 0, combo: 0, zone: 0, ghost: null });
+    LB.length = 0;
     G.course = makeCourse((Math.random() * 4294967296) >>> 0, 'zen');
     addStar(G.course);
     const first = G.course.stars[0];
@@ -1432,6 +1540,7 @@ button.rang:focus-visible, .lien:focus-visible {
   function refreshMenu() {
     $('#menu-poussiere').textContent = fmt(S.dust);
     $('#compte-succes').textContent = `${Object.keys(S.ach).length}/${ACHIEVEMENTS.length}`;
+    $('#compte-carnet').textContent = `${S.reels.length}/${REAL_STARS.length}`;
     const best = S.history[dayKey()];
     $('#defi-sous').textContent = best ? `Ton record du jour : ${fmt(best.score)}` : `${DAILY_LENGTH} astres · le même parcours pour tous`;
     $('#btn-son').setAttribute('aria-pressed', String(S.sound));
@@ -1449,6 +1558,7 @@ button.rang:focus-visible, .lien:focus-visible {
     G.daily = { started: false, time: 0, finished: false, rec: [], recT: 0, reached: 0 };
     P.length = 0;
     TX.length = 0;
+    LB.length = 0;
     if (mode === 'daily') {
       G.course = makeCourse(hashStr('orbite:' + day), 'daily');
       while (!G.course.done) addStar(G.course);
@@ -1826,12 +1936,34 @@ button.rang:focus-visible, .lien:focus-visible {
     $('#succes-stats').textContent = `Astres rejoints : ${fmt(S.starsTotal)} · Captures parfaites : ${fmt(S.perfectsTotal)} · Meilleure série : ${fmt(S.bestSeries)}`;
   }
 
+  /* ——— Carnet ——— */
+  function chip(text, cls, hue) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    if (cls) li.className = cls;
+    if (hue != null) li.style.setProperty('--c', `hsl(${hue},100%,80%)`);
+    return li;
+  }
+  function renderCarnet() {
+    const n = S.reels.length, left = REAL_STARS.length - n;
+    $('#carnet-total').textContent = `${fmt(S.starsTotal)} astre${S.starsTotal > 1 ? 's' : ''} atteint${S.starsTotal > 1 ? 's' : ''} depuis le début.`;
+    $('#carnet-reels-compte').textContent = `${n} / ${REAL_STARS.length}`;
+    // Dans l'ordre du ciel (la liste va des plus brillantes aux plus discrètes).
+    const found = REAL_STARS.filter((r) => S.reels.includes(r));
+    $('#carnet-reels').replaceChildren(...found.map((r) => chip(`★ ${r}`, 'reelle')),
+      chip(n ? `Encore ${left} à trouver.` : 'Aucune pour l’instant : vise les astres dorés !', 'vide'));
+    $('#carnet-derniers').replaceChildren(...(S.vus.length
+      ? S.vus.map((v) => chip(v.r ? `★ ${v.n}` : v.n, v.r ? 'reelle' : '', v.r ? null : v.h))
+      : [chip('Pars en voyage : chaque astre atteint reçoit un nom.', 'vide')]));
+  }
+
   function openSub(name, from) {
     Sound.ensure();
     backTo = from;
     pendingBuy = null;
     if (name === 'apparences') { $('#apparences-msg').textContent = ''; renderSkins(); }
     if (name === 'succes') renderAchievements();
+    if (name === 'carnet') renderCarnet();
     if (name === 'classement') {
       $('#classement-pseudo-champ').value = S.pseudo;
       $('#classement-pseudo .note').textContent = '';
@@ -1846,7 +1978,7 @@ button.rang:focus-visible, .lien:focus-visible {
   // Touche Échap et bouton retour d'Android. Renvoie false quand il n'y a plus rien à fermer (menu principal).
   function goBack() {
     if (G.playing) { if (G.paused) resume(); else pause(); return true; }
-    if (current === 'apparences' || current === 'succes' || current === 'classement') closeSub();
+    if (current === 'apparences' || current === 'succes' || current === 'carnet' || current === 'classement') closeSub();
     else if (current === 'bilan' || current === 'defi') showMenu();
     else if (current === 'menu') return false;
     return true;
